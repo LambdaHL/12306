@@ -21,7 +21,7 @@ class query:
     def __init__(self, session, from_station, to_station, from_station_h, to_station_h, _station_seat, station_trains,
                  ticke_peoples_num, station_dates=None, ):
         self.session = session
-        self.httpClint = HTTPClient()
+        self.httpClint = HTTPClient(session.is_proxy)
         self.urls = urlConf.urls
         self.from_station = from_station
         self.to_station = to_station
@@ -53,11 +53,18 @@ class query:
                 '硬卧': 28,
                 '硬座': 29,
                 '无座': 26,
+                '动卧': 33,
                 }
         return seat[index]
 
     def check_time_interval(self, ticket_info):
-        return self.departure_time <= time_to_minutes(ticket_info[8]) and \
+        """
+        判断日期是否符合当前设置时间
+        fix: https://github.com/testerSunshine/12306/issues/256
+        :param ticket_info:
+        :return:
+        """
+        return self.departure_time <= time_to_minutes(ticket_info[8]) <= self.arrival_time and \
                time_to_minutes(ticket_info[9]) <= self.arrival_time and \
                time_to_minutes(ticket_info[10]) <= self.take_time
 
@@ -94,15 +101,16 @@ class query:
                 continue
             value = station_ticket.get("data", "")
             if not value:
-                print (u'{0}-{1} 车次坐席查询为空,ip网络异常，查询url: https://kyfw.12306.cn{2}, 可以手动查询是否有票'.format(self.from_station_h,
-                                                                                               self.to_station_h,
-                                                                                               select_url["req_url"]))
+                print(u'{0}-{1} 车次坐席查询为空,ip网络异常，可能是时间配置未正确，查询url: https://kyfw.12306.cn{2}, 可以手动查询是否有票'.format(
+                    self.from_station_h,
+                    self.to_station_h,
+                    select_url["req_url"]))
             else:
                 result = value.get('result', [])
                 if result:
                     for i in value['result']:
                         ticket_info = i.split('|')
-                        if ticket_info[11] == "Y" and ticket_info[1].encode("utf8") == "预订":  # 筛选未在开始时间内的车次
+                        if ticket_info[11] == "Y" and ticket_info[1] == "预订":  # 筛选未在开始时间内的车次
                             for j in self._station_seat:
                                 is_ticket_pass = ticket_info[j]
                                 if is_ticket_pass != '' and is_ticket_pass != '无' and is_ticket_pass != '*' and self.check_is_need_train(
@@ -123,11 +131,11 @@ class query:
                                         ticket_num = int(ticket_info[j])
                                     except ValueError:
                                         ticket_num = "有"
-                                    print (u'车次: {0} 始发车站: {1} 终点站: {2} {3}: {4}'.format(ticket_info[3],
-                                                                                         self.from_station_h,
-                                                                                         self.to_station_h,
-                                                                                         seat_conf_2[j],
-                                                                                         ticket_num))
+                                    print(u'车次: {0} 始发车站: {1} 终点站: {2} {3}: {4}'.format(ticket_info[3],
+                                                                                        self.from_station_h,
+                                                                                        self.to_station_h,
+                                                                                        seat_conf_2[j],
+                                                                                        ticket_num))
                                     if wrapcache.get(train_no):
                                         print(ticket.QUERY_IN_BLACK_LIST.format(train_no))
                                         continue
@@ -143,7 +151,7 @@ class query:
                                         else:
                                             print(u"设置乘车人数为: {}".format(self.ticke_peoples_num))
                                             is_more_ticket_num = self.ticke_peoples_num
-                                        print (ticket.QUERY_C)
+                                        print(ticket.QUERY_C)
                                         return {
                                             "secretStr": secretStr,
                                             "train_no": train_no,
@@ -161,7 +169,7 @@ class query:
                                         }
                 else:
                     print(u"车次配置信息有误，或者返回数据异常，请检查 {}".format(station_ticket))
-        return {"code": ticket.FAIL_CODE, "status": False, "cdn": self.httpClint.cdn,}
+        return {"code": ticket.FAIL_CODE, "status": False, "cdn": self.httpClint.cdn, }
 
 
 if __name__ == "__main__":

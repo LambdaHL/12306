@@ -4,27 +4,37 @@ import socket
 from collections import OrderedDict
 from time import sleep
 import requests
+
+from agency.agency_tools import proxy
 from config import logger
+
 
 def _set_header_default():
     header_dict = OrderedDict()
-    header_dict["Accept"] = "application/json, text/plain, */*"
+    # header_dict["Accept"] = "application/json, text/plain, */*"
     header_dict["Accept-Encoding"] = "gzip, deflate"
     header_dict[
         "User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) 12306-electron/1.0.1 Chrome/59.0.3071.115 Electron/1.8.4 Safari/537.36"
     header_dict["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+    header_dict["Origin"] = "https://kyfw.12306.cn"
+    header_dict["Connection"] = "keep-alive"
     return header_dict
 
 
 class HTTPClient(object):
 
-    def __init__(self):
+    def __init__(self, is_proxy):
         """
         :param method:
         :param headers: Must be a dict. Such as headers={'Content_Type':'text/html'}
         """
         self.initS()
         self._cdn = None
+        self._proxies = None
+        if is_proxy is 1:
+            self.proxy = proxy()
+            self._proxies = self.proxy.setProxy()
+            # print(u"设置当前代理ip为 {}, 请注意代理ip是否可用！！！！！请注意代理ip是否可用！！！！！请注意代理ip是否可用！！！！！".format(self._proxies))
 
     def initS(self):
         self._s = requests.Session()
@@ -116,20 +126,25 @@ class HTTPClient(object):
             url_host = self._cdn
         elif is_cdn:
             if self._cdn:
-                print(u"当前请求cdn为{}".format(self._cdn))
+                # print(u"当前请求cdn为{}".format(self._cdn))
                 url_host = self._cdn
             else:
                 url_host = urls["Host"]
         else:
             url_host = urls["Host"]
+        http = urls.get("httpType") or "https"
         for i in range(re_try):
             try:
                 # sleep(urls["s_time"]) if "s_time" in urls else sleep(0.001)
                 sleep(s_time)
-                requests.packages.urllib3.disable_warnings()
+                try:
+                    requests.packages.urllib3.disable_warnings()
+                except:
+                    pass
                 response = self._s.request(method=method,
                                            timeout=2,
-                                           url="https://" + url_host + req_url,
+                                           proxies=self._proxies,
+                                           url=http + "://" + url_host + req_url,
                                            data=data,
                                            allow_redirects=allow_redirects,
                                            verify=False,
@@ -148,7 +163,7 @@ class HTTPClient(object):
                     else:
                         logger.log(
                             u"url: {} 返回参数为空".format(urls["req_url"]))
-                        return error_data
+                        continue
                 else:
                     sleep(urls["re_time"])
             except (requests.exceptions.Timeout, requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
